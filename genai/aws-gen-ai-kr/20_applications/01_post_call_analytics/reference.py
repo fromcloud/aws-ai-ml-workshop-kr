@@ -9,9 +9,7 @@ from langchain_core.prompts import PromptTemplate
 import IPython.display as ipd
 
 
-st.set_page_config(layout="wide")
-st.title("Bedrock 을 이용한 VOC 질의 Bot")
-
+st.title("Bedrock 을 이용한 보이스 콜 분석")
 #st.set_page_config(initial_sidebar_state="auto")
 st.sidebar.info("This app demonstrates post-call analytics using Amazon Bedrock and Streamlit.")
 
@@ -138,6 +136,7 @@ def upload_file(file):
     text = ""
     if file is not None:
         # Save the file to S3
+        st.write(file)
         s3_path = f's3://{bucket_name}/records/{uploaded_file.name}'
         s3_client.upload_fileobj(uploaded_file, bucket_name, f"records/{uploaded_file.name}")
         st.success(f"File uploaded to {s3_path}")
@@ -277,13 +276,3 @@ if prompt:
     with st.chat_message("assistant"):
         st.write(res)
 
-
-# sample questions
-# 고객의 감정은 어떤가요?
-# 문제에 대한 개선을 위해서 어떤 방법이 있을까요?
-# 학습지는 언제 종료되나요?
-# 환불은 언제 가능한가요?
-# 결제된 금액은 얼마인가요?
-# 상담원의 이름은 무엇인가요?
-# 상담을 요청한 사람의 성별은 무엇입니까?
-# 상담을 요청한 사람의 나이는 어떻게 되나요?
