@@ -1,2 +1,2 @@
 ## 실행방법
-streamlit run frontend.py
+```streamlit run frontend.py```
