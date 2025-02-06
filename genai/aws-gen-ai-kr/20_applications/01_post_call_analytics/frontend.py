@@ -257,27 +257,29 @@ for message in st.session_state.messages:
 prompt = st.chat_input("이 콜에 대해 물어보세요 ...")
 
 
-if prompt:
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    # Display user message
-    with st.chat_message("user"):
-        st.write(prompt)
-    
-    # Simulate bot response
-    time.sleep(1)  # Simulate processing time
-    bot_response = f"You said: {prompt}"
+try:
+    if prompt and st.session_state.transcribed_text:
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        
+        # Display user message
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Simulate bot response
+        time.sleep(1)  # Simulate processing time
+        bot_response = f"You said: {prompt}"
 
-    res = response(prompt, st.session_state.transcribed_text)
-    
-    # Add bot response to chat history
-    st.session_state.messages.append({"role": "assistant", "content": res})
-    
-    # Display bot response
-    with st.chat_message("assistant"):
-        st.write(res)
-
+        res = response(prompt, st.session_state.transcribed_text)
+        
+        # Add bot response to chat history
+        st.session_state.messages.append({"role": "assistant", "content": res})
+        
+        # Display bot response
+        with st.chat_message("assistant"):
+            st.write(res)
+except:
+    st.write("먼저 VOC wav file 을 업로드하시기 바랍니다.")
 
 # sample questions
 # 고객의 감정은 어떤가요?
