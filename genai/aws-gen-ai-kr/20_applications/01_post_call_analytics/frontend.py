@@ -3,10 +3,6 @@ import boto3
 import json
 import time
 from urllib.request import urlopen
-#from langchain.llms.bedrock import Bedrock
-from langchain_community.llms import Bedrock
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain_core.prompts import PromptTemplate
 import IPython.display as ipd
 
 
@@ -23,41 +19,30 @@ s3_client = boto3.client('s3', region_name=region)
 transcribe_client = boto3.client('transcribe', region_name=region)
 bedrock_client = boto3.client("bedrock-runtime", region_name=region)
 
-# template definition
-summary_template_ko = """\n\nHuman:
-아래의 리테일 지원 통화 기록을 분석하세요. 전체 문장으로 대화에 대한 자세한 요약을 제공하세요.
+# template definition for Claude 3
+summary_template_ko = """아래의 리테일 지원 통화 기록을 분석하세요. 전체 문장으로 대화에 대한 자세한 요약을 제공하세요.
 
 통화: "{transcript}"
 
-요약:
+요약:"""
 
-\n\nAssistant:"""
-
-question_template_ko = """\n\nHuman:
-
-아래의 통화 기록을 바탕으로 질문에 답하세요.
+question_template_ko = """아래의 통화 기록을 바탕으로 질문에 답하세요.
 "<시작시간>" 이어지는 문장의 시작시간을 나타내고 "<종료시간>"은 앞 문장의 종료시간을 나타냅니다.
 
 통화: "{transcript}"
 
 질문: "{question}"
 
-응답:
+응답:"""
 
-\n\nAssistant:"""
-
-question_time_template_ko = """\n\nHuman:
-
-아래의 통화 기록을 바탕으로 질문에 답하세요.
+question_time_template_ko = """아래의 통화 기록을 바탕으로 질문에 답하세요.
 "<시작시간>" 이어지는 문장의 시작시간을 나타내고 "<종료시간>"은 앞 문장의 종료시간을 나타냅니다.
 
 통화: "{transcript}"
 
 질문: "{question} 답변과 함께 답변을 위해 참조한 대화의 시작 및 종료시간을 아래 형태로 알려주세요. \n답변:\n시작시간:\n종료시간:"
 
-응답:
-
-\n\nAssistant:"""
+응답:"""
 
 
 # S3 bucket setup
@@ -65,40 +50,50 @@ question_time_template_ko = """\n\nHuman:
 prefix = "hsw"
 bucket_name = f'bedrock-training-{prefix}'
 
-# LLM setup
-llm = Bedrock(
-    #model_id="Claude-V2-1",
-    model_id="anthropic.claude-v2",
-    client=bedrock_client,
-    model_kwargs={
-        "max_tokens_to_sample": 512,
+# Direct Bedrock client usage instead of LangChain
+def invoke_bedrock_model(prompt, model_id="anthropic.claude-3-5-sonnet-20241022-v2:0", max_tokens=512):
+    # Claude 3 uses a different message format
+    body = json.dumps({
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": max_tokens,
         "temperature": 0,
         "top_p": 0.999,
-    },
-    streaming=True,
-    callbacks=[StreamingStdOutCallbackHandler()]
-)
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "stop_sequences": ["Human:", "인간:", "상담사:", "질문:"]
+    })
+    
+    try:
+        response = bedrock_client.invoke_model(
+            body=body,
+            modelId=model_id,
+            accept="application/json",
+            contentType="application/json"
+        )
+        
+        response_body = json.loads(response.get('body').read())
+        return response_body.get('content', [{}])[0].get('text', '')
+    except Exception as e:
+        st.error(f"Bedrock 모델 호출 오류: {e}")
+        return ""
 
-PARAMS = {
-    "max_tokens_to_sample":512,
-    "stop_sequences":["\n\nHuman", "\n\n인간", "\n\n상담사", "\n\n\n", "\n\n질문"],
-    "temperature":0,
-    "top_p":0.999
-}
 
-#@st.cache_data
-def analysis(_llm, transcript, params, question=None, template="", max_tokens=50):
+
+@st.cache_data
+def analysis(transcript, question=None, template="", max_tokens=512):
     if question is None:
-        prompt = PromptTemplate(template=template, input_variables=["transcript"])
-        analysis_prompt = prompt.format(transcript=transcript)
+        analysis_prompt = template.format(transcript=transcript)
     else:
-        prompt = PromptTemplate(template=template, input_variables=["transcript", "question"])
-        analysis_prompt = prompt.format(
+        analysis_prompt = template.format(
             transcript=transcript,
             question=question
         )
-    _llm.model_kwargs = params
-    response = _llm(analysis_prompt)
+    
+    response = invoke_bedrock_model(analysis_prompt, max_tokens=max_tokens)
     return response
 
 
@@ -184,26 +179,21 @@ def transcribe(transcribe_button, s3_path):
 
 @st.cache_data
 def summary(text):    
-    summary = analysis(
-        _llm=llm,
+    summary_result = analysis(
         transcript=text,
-        params=PARAMS,
         template=summary_template_ko
     )
-    return summary
+    return summary_result
 
 
 @st.cache_data
 def response(question, text):
     res = analysis(
-        _llm=llm,
         transcript=text,
-        params=PARAMS,
         question=question,
         template=question_template_ko
     )
     return res
-    #if not llm.streaming: print (res)
 
 
 uploaded_file = st.file_uploader("Choose an audio file", type=['wav'])
